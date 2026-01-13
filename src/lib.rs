@@ -46,6 +46,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use base64::prelude::*;
+use scraper::{Html, Selector};
 use thiserror::Error;
 
 /// The embedded AppleScript used for exporting notes.
@@ -93,6 +95,10 @@ pub enum ExportError {
     /// The AppleScript exited with a non-zero status code.
     #[error("AppleScript exited with status {0}")]
     ScriptFailed(i32),
+
+    /// Failed to decode base64 image data.
+    #[error("Failed to decode base64 image: {0}")]
+    Base64DecodeError(#[from] base64::DecodeError),
 }
 
 /// Result type alias for export operations.
@@ -252,6 +258,65 @@ impl Exporter {
         self.run_script(&["export", folder_spec, output_dir_str])
     }
 
+    /// Exports a folder and extracts all embedded images to attachment folders.
+    ///
+    /// This combines [`export_folder`](Self::export_folder) with
+    /// [`extract_attachments_from_directory`] for convenience.
+    ///
+    /// # Arguments
+    ///
+    /// * `folder` - The folder name to export.
+    /// * `output_dir` - The directory where exported notes will be saved.
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `ExtractionResult` for each HTML file processed.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use apple_notes_exporter_rs::Exporter;
+    ///
+    /// let exporter = Exporter::new();
+    /// let results = exporter.export_folder_with_attachments("My Notes", "./exports")
+    ///     .expect("Failed to export");
+    ///
+    /// let total: usize = results.iter().map(|r| r.attachments.len()).sum();
+    /// println!("Extracted {total} attachments");
+    /// ```
+    pub fn export_folder_with_attachments<P: AsRef<Path>>(
+        &self,
+        folder: &str,
+        output_dir: P,
+    ) -> Result<Vec<ExtractionResult>> {
+        self.export_folder(folder, &output_dir)?;
+        extract_attachments_from_directory(&output_dir)
+    }
+
+    /// Exports a folder from a specific account and extracts all embedded images.
+    ///
+    /// This combines [`export_folder_from_account`](Self::export_folder_from_account) with
+    /// [`extract_attachments_from_directory`] for convenience.
+    ///
+    /// # Arguments
+    ///
+    /// * `account` - The account name (e.g., "iCloud", "Google", "On My Mac").
+    /// * `folder` - The folder name to export.
+    /// * `output_dir` - The directory where exported notes will be saved.
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `ExtractionResult` for each HTML file processed.
+    pub fn export_folder_from_account_with_attachments<P: AsRef<Path>>(
+        &self,
+        account: &str,
+        folder: &str,
+        output_dir: P,
+    ) -> Result<Vec<ExtractionResult>> {
+        self.export_folder_from_account(account, folder, &output_dir)?;
+        extract_attachments_from_directory(&output_dir)
+    }
+
     fn run_script(&self, args: &[&str]) -> Result<()> {
         check_platform()?;
 
@@ -368,4 +433,210 @@ pub fn export_folder_from_account<P: AsRef<Path>>(
     output_dir: P,
 ) -> Result<()> {
     Exporter::new().export_folder_from_account(account, folder, output_dir)
+}
+
+// =============================================================================
+// Attachment Extraction
+// =============================================================================
+
+/// Information about an extracted attachment.
+#[derive(Debug, Clone)]
+pub struct ExtractedAttachment {
+    /// The file path where the attachment was saved.
+    pub path: PathBuf,
+    /// The original data URL that was replaced.
+    pub original_data_url: String,
+    /// The MIME type of the attachment (e.g., "image/png").
+    pub mime_type: String,
+}
+
+/// Result of extracting attachments from an HTML file.
+#[derive(Debug)]
+pub struct ExtractionResult {
+    /// The HTML file that was processed.
+    pub html_path: PathBuf,
+    /// The attachments that were extracted.
+    pub attachments: Vec<ExtractedAttachment>,
+    /// Whether the HTML file was modified.
+    pub html_modified: bool,
+}
+
+/// Extracts base64-encoded images from an HTML file and saves them to an attachments folder.
+///
+/// For an HTML file like `My Note -- abc123.html`, images are saved to
+/// `My Note -- abc123-attachments/attachment-001.png`, etc.
+///
+/// The HTML file is updated in-place to reference the local files instead of data URLs.
+///
+/// # Arguments
+///
+/// * `html_path` - Path to the HTML file to process.
+///
+/// # Returns
+///
+/// Returns an `ExtractionResult` with details about what was extracted.
+///
+/// # Example
+///
+/// ```no_run
+/// use apple_notes_exporter_rs::extract_attachments_from_html;
+///
+/// let result = extract_attachments_from_html("./exports/My Note -- abc123.html")
+///     .expect("Failed to extract attachments");
+///
+/// println!("Extracted {} attachments", result.attachments.len());
+/// ```
+pub fn extract_attachments_from_html<P: AsRef<Path>>(html_path: P) -> Result<ExtractionResult> {
+    let html_path = html_path.as_ref();
+    let html_content = fs::read_to_string(html_path)?;
+
+    let document = Html::parse_document(&html_content);
+    let img_selector = Selector::parse("img").unwrap();
+
+    let mut attachments = Vec::new();
+    let mut modified_html = html_content.clone();
+    let mut attachment_count = 0;
+
+    // Determine the attachments folder name based on the HTML file stem
+    let html_stem = html_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("note");
+    let attachments_dir = html_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(format!("{html_stem}-attachments"));
+
+    for element in document.select(&img_selector) {
+        let Some(src) = element.value().attr("src") else {
+            continue;
+        };
+
+        // Check if this is a data URL
+        if !src.starts_with("data:image/") {
+            continue;
+        }
+
+        // Parse the data URL: data:image/png;base64,iVBORw0...
+        let Some((mime_part, base64_data)) = src.strip_prefix("data:").and_then(|s| s.split_once(",")) else {
+            continue;
+        };
+
+        // Extract MIME type (e.g., "image/png;base64" -> "image/png")
+        let mime_type = mime_part.split(';').next().unwrap_or("image/png");
+
+        // Determine file extension from MIME type
+        let extension = match mime_type {
+            "image/png" => "png",
+            "image/jpeg" | "image/jpg" => "jpg",
+            "image/gif" => "gif",
+            "image/webp" => "webp",
+            "image/svg+xml" => "svg",
+            "image/bmp" => "bmp",
+            "image/tiff" => "tiff",
+            _ => "bin",
+        };
+
+        // Decode base64 data
+        let decoded_data = BASE64_STANDARD.decode(base64_data)?;
+
+        // Create attachments directory if needed
+        if !attachments_dir.exists() {
+            fs::create_dir_all(&attachments_dir)?;
+        }
+
+        // Generate filename
+        attachment_count += 1;
+        let filename = format!("attachment-{attachment_count:03}.{extension}");
+        let attachment_path = attachments_dir.join(&filename);
+
+        // Write the attachment file
+        fs::write(&attachment_path, &decoded_data)?;
+
+        // Calculate relative path from HTML file to attachment
+        let attachments_folder_name = attachments_dir
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("attachments");
+        let relative_path = format!("{attachments_folder_name}/{filename}");
+
+        // Replace the data URL with the relative path in the HTML
+        modified_html = modified_html.replace(src, &relative_path);
+
+        attachments.push(ExtractedAttachment {
+            path: attachment_path,
+            original_data_url: src.to_string(),
+            mime_type: mime_type.to_string(),
+        });
+    }
+
+    // Write modified HTML if any attachments were extracted
+    let html_modified = !attachments.is_empty();
+    if html_modified {
+        fs::write(html_path, &modified_html)?;
+    }
+
+    Ok(ExtractionResult {
+        html_path: html_path.to_path_buf(),
+        attachments,
+        html_modified,
+    })
+}
+
+/// Extracts attachments from all HTML files in a directory (recursively).
+///
+/// # Arguments
+///
+/// * `dir` - The directory to scan for HTML files.
+///
+/// # Returns
+///
+/// Returns a vector of `ExtractionResult` for each HTML file processed.
+///
+/// # Example
+///
+/// ```no_run
+/// use apple_notes_exporter_rs::extract_attachments_from_directory;
+///
+/// let results = extract_attachments_from_directory("./exports")
+///     .expect("Failed to extract attachments");
+///
+/// let total_attachments: usize = results.iter().map(|r| r.attachments.len()).sum();
+/// println!("Extracted {total_attachments} attachments from {} files", results.len());
+/// ```
+pub fn extract_attachments_from_directory<P: AsRef<Path>>(dir: P) -> Result<Vec<ExtractionResult>> {
+    let dir = dir.as_ref();
+    let mut results = Vec::new();
+
+    extract_attachments_recursive(dir, &mut results)?;
+
+    Ok(results)
+}
+
+fn extract_attachments_recursive(dir: &Path, results: &mut Vec<ExtractionResult>) -> Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            // Skip attachment directories to avoid reprocessing
+            if path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(|name| name.ends_with("-attachments"))
+            {
+                continue;
+            }
+            extract_attachments_recursive(&path, results)?;
+        } else if path.extension().is_some_and(|ext| ext == "html") {
+            let result = extract_attachments_from_html(&path)?;
+            results.push(result);
+        }
+    }
+
+    Ok(())
 }
