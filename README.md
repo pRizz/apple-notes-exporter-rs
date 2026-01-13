@@ -1,6 +1,7 @@
 # Apple Notes Exporter
 
-[![Rust](https://img.shields.io/badge/rust-1.0+-orange.svg)](https://www.rust-lang.org/)
+[![crates.io](https://img.shields.io/crates/v/apple-notes-exporter-rs.svg)](https://crates.io/crates/apple-notes-exporter-rs)
+[![Repository](https://img.shields.io/badge/repo-github-blue)](https://github.com/pRizz/apple-notes-exporter-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A command-line tool for recursively exporting Apple Notes folders to the file system via AppleScript. This Rust-based tool allows you to export entire folder hierarchies from Apple Notes, creating a mirrored directory structure with each note saved as an HTML file.
