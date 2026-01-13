@@ -1,10 +1,11 @@
 # Apple Notes Exporter
 
 [![crates.io](https://img.shields.io/crates/v/apple-notes-exporter-rs.svg)](https://crates.io/crates/apple-notes-exporter-rs)
+[![docs.rs](https://docs.rs/apple-notes-exporter-rs/badge.svg)](https://docs.rs/apple-notes-exporter-rs)
 [![Repository](https://img.shields.io/badge/repo-github-blue)](https://github.com/pRizz/apple-notes-exporter-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A command-line tool for recursively exporting Apple Notes folders to the file system via AppleScript. This Rust-based tool allows you to export entire folder hierarchies from Apple Notes, creating a mirrored directory structure with each note saved as an HTML file.
+A library and CLI tool for recursively exporting Apple Notes folders to the file system via AppleScript. This Rust-based tool allows you to export entire folder hierarchies from Apple Notes, creating a mirrored directory structure with each note saved as an HTML file.
 
 ## Quick Install
 
@@ -29,8 +30,9 @@ cargo install --git https://github.com/pRizz/apple-notes-exporter-rs.git
 - Breadth-first search (BFS) to find folders at any level
 - Support for multiple Apple Notes accounts
 - Simple command-line interface with subcommands
+- Library API for programmatic access
 
-## Installation
+## CLI Installation
 
 ### Install from crates.io (Recommended)
 
@@ -56,7 +58,7 @@ cargo build --release
 
 The binary will be available at `target/release/apple-notes-exporter`.
 
-## Usage
+## CLI Usage
 
 The tool provides two subcommands: `list` and `export`.
 
@@ -119,6 +121,92 @@ If you already cloned without `--recursive`, initialize the submodules:
 git submodule update --init --recursive
 ```
 
+## Library Usage
+
+Add the dependency to your `Cargo.toml`:
+
+```toml
+[dependencies]
+apple-notes-exporter-rs = "1.0"
+```
+
+### Quick Start
+
+```rust
+use apple_notes_exporter_rs::{list_folders, export_folder, export_folder_from_account};
+
+fn main() -> apple_notes_exporter_rs::Result<()> {
+    // List all available folders (prints to stdout)
+    list_folders()?;
+
+    // Export a folder to a directory (searches all accounts)
+    export_folder("My Notes", "./exports")?;
+
+    // Export from a specific account (useful when folder names are duplicated)
+    export_folder_from_account("iCloud", "Work", "./exports")?;
+    export_folder_from_account("Google", "Work", "./google_exports")?;
+
+    Ok(())
+}
+```
+
+### Using the Exporter Struct
+
+For more control, use the `Exporter` struct:
+
+```rust
+use apple_notes_exporter_rs::Exporter;
+
+fn main() -> apple_notes_exporter_rs::Result<()> {
+    // Create an exporter with the embedded AppleScript
+    let exporter = Exporter::new();
+
+    exporter.list_folders()?;
+    exporter.export_folder("My Notes", "./exports")?;
+    exporter.export_folder_from_account("iCloud", "Work", "./work_exports")?;
+
+    Ok(())
+}
+```
+
+### Using a Custom AppleScript
+
+If you need to use a modified AppleScript:
+
+```rust
+use apple_notes_exporter_rs::Exporter;
+
+fn main() -> apple_notes_exporter_rs::Result<()> {
+    let exporter = Exporter::with_script_path("./custom_script.applescript")?;
+
+    exporter.list_folders()?;
+    exporter.export_folder("My Notes", "./exports")?;
+
+    Ok(())
+}
+```
+
+### Error Handling
+
+The library provides a custom `ExportError` type:
+
+```rust
+use apple_notes_exporter_rs::{export_folder, ExportError};
+
+fn main() {
+    match export_folder("My Notes", "./exports") {
+        Ok(()) => println!("Export successful!"),
+        Err(ExportError::ScriptNotFound(path)) => {
+            eprintln!("Script not found: {}", path.display());
+        }
+        Err(ExportError::ScriptFailed(code)) => {
+            eprintln!("AppleScript failed with exit code: {}", code);
+        }
+        Err(e) => eprintln!("Error: {}", e),
+    }
+}
+```
+
 ## How It Works
 
 1. **Folder Search**: The tool uses breadth-first search (BFS) to find the specified folder at any level in your Apple Notes hierarchy (not just top-level folders).
@@ -150,7 +238,8 @@ If permissions are not granted, the export will fail.
 ```
 apple-notes-exporter-rs/
 ├── src/
-│   └── main.rs              # Main application code
+│   ├── lib.rs               # Library with public API
+│   └── main.rs              # CLI application
 ├── vendor/
 │   └── apple-notes-exporter/
 │       └── scripts/
