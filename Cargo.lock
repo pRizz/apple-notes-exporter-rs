@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "apple-notes-exporter-rs"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "clap",
  "tempfile",
