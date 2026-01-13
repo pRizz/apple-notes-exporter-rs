@@ -22,6 +22,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// List all available top-level folders across all accounts
+    #[command(alias = "ls")]
     List,
 
     /// Export a folder recursively to HTML files

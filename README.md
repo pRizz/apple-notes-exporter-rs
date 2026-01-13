@@ -60,7 +60,7 @@ The binary will be available at `target/release/apple-notes-exporter`.
 
 ## CLI Usage
 
-The tool provides two subcommands: `list` and `export`.
+The tool provides two subcommands: `list` (or `ls`) and `export`.
 
 ### List Available Folders
 
@@ -68,6 +68,8 @@ List all top-level folders across all Apple Notes accounts:
 
 ```bash
 apple-notes-exporter list
+# or
+apple-notes-exporter ls
 ```
 
 ### Export a Folder
@@ -83,7 +85,7 @@ apple-notes-exporter export <FOLDER> <OUTPUT_DIR>
 List all available folders:
 
 ```bash
-apple-notes-exporter list
+apple-notes-exporter list   # or: apple-notes-exporter ls
 ```
 
 Export a folder (searches all accounts):
@@ -109,7 +111,7 @@ git clone --recursive https://github.com/pRizz/apple-notes-exporter-rs.git
 cd apple-notes-exporter-rs
 
 # List folders
-cargo run -- list
+cargo run -- list   # or: cargo run -- ls
 
 # Export a folder
 cargo run -- export "My Notes" ./exports
