@@ -22,12 +22,13 @@ cargo install --git https://github.com/pRizz/apple-notes-exporter-rs.git
 
 ## Features
 
-- ✅ Recursive export of Apple Notes folders (including all subfolders and notes)
-- ✅ Creates a mirrored directory tree structure
-- ✅ Exports each note as an HTML file
-- ✅ Breadth-first search (BFS) to find folders at any level
-- ✅ Support for multiple Apple Notes accounts
-- ✅ Simple command-line interface
+- Recursive export of Apple Notes folders (including all subfolders and notes)
+- List all available folders across all accounts
+- Creates a mirrored directory tree structure
+- Exports each note as an HTML file
+- Breadth-first search (BFS) to find folders at any level
+- Support for multiple Apple Notes accounts
+- Simple command-line interface with subcommands
 
 ## Installation
 
@@ -48,7 +49,7 @@ cargo install --git https://github.com/pRizz/apple-notes-exporter-rs.git
 ### Build from Source
 
 ```bash
-git clone https://github.com/pRizz/apple-notes-exporter-rs.git
+git clone --recursive https://github.com/pRizz/apple-notes-exporter-rs.git
 cd apple-notes-exporter-rs
 cargo build --release
 ```
@@ -57,32 +58,65 @@ The binary will be available at `target/release/apple-notes-exporter`.
 
 ## Usage
 
-The tool requires an output directory and a folder name to export. Only one folder can be exported at a time.
+The tool provides two subcommands: `list` and `export`.
 
-### Basic Usage
+### List Available Folders
+
+List all top-level folders across all Apple Notes accounts:
 
 ```bash
-apple-notes-exporter -o <OUTPUT_DIR> <NOTES_FOLDER>
+apple-notes-exporter list
 ```
 
-### Options
+### Export a Folder
 
-- `-o, --output-dir <DIR>` - Output directory for exported notes (required)
-- `<NOTES_FOLDER>` - Apple Notes folder name to export recursively (required, positional argument)
+Export a folder recursively to HTML files:
+
+```bash
+apple-notes-exporter export <FOLDER> <OUTPUT_DIR>
+```
 
 ### Examples
 
-Export a folder from the default iCloud account:
+List all available folders:
 
 ```bash
-apple-notes-exporter -o ./exports "My Notes"
+apple-notes-exporter list
+```
+
+Export a folder (searches all accounts):
+
+```bash
+apple-notes-exporter export "My Notes" ./exports
 ```
 
 Export a folder from a specific account (useful when folder names exist in multiple accounts):
 
 ```bash
-apple-notes-exporter -o ./exports "iCloud:My Notes"
-apple-notes-exporter -o ./exports "Google:Work Notes"
+apple-notes-exporter export "iCloud:My Notes" ./exports
+apple-notes-exporter export "Google:Work Notes" ./exports
+```
+
+## Running from Source
+
+If you want to run the tool directly from the source code without installing:
+
+```bash
+# Clone the repository with submodules
+git clone --recursive https://github.com/pRizz/apple-notes-exporter-rs.git
+cd apple-notes-exporter-rs
+
+# List folders
+cargo run -- list
+
+# Export a folder
+cargo run -- export "My Notes" ./exports
+```
+
+If you already cloned without `--recursive`, initialize the submodules:
+
+```bash
+git submodule update --init --recursive
 ```
 
 ## How It Works
@@ -93,7 +127,7 @@ apple-notes-exporter -o ./exports "Google:Work Notes"
 
 3. **Output Format**: Each note is exported as an HTML file, preserving the folder structure in the output directory.
 
-4. **Account Handling**: By default, the folder search looks in the "iCloud" account. If a folder name exists in multiple accounts, you can specify the account using the `AccountName:FolderName` format.
+4. **Account Handling**: By default, the folder search looks in all accounts. If a folder name exists in multiple accounts, you can specify the account using the `AccountName:FolderName` format.
 
 ## Requirements
 
@@ -120,7 +154,7 @@ apple-notes-exporter-rs/
 ├── vendor/
 │   └── apple-notes-exporter/
 │       └── scripts/
-│           └── export_notes_recursive.applescript  # AppleScript used for export
+│           └── export_notes.applescript  # AppleScript used for export
 ├── Cargo.toml
 └── README.md
 ```
@@ -135,4 +169,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Acknowledgments
 
-This tool uses the AppleScript from the [apple-notes-exporter](https://github.com/peterryszkiewicz/apple-notes-exporter) project, which is included as a vendor dependency.
+This tool uses the AppleScript from the [apple-notes-exporter](https://github.com/pRizz/apple-notes-exporter) project, which is included as a git submodule.
