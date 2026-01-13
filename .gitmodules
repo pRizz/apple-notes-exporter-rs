@@ -1,0 +1,3 @@
+[submodule "vendor/apple-notes-exporter"]
+	path = vendor/apple-notes-exporter
+	url = git@github.com:pRizz/apple-notes-exporter.git
