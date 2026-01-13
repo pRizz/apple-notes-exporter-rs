@@ -8,7 +8,7 @@ on:
 jobs:
   publish:
     name: Publish to crates.io
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     

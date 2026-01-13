@@ -223,7 +223,7 @@ fn main() {
 
 ### macOS Only
 
-This tool is macOS-specific as it relies on AppleScript to interact with the Notes app.
+This tool is macOS-specific as it relies on AppleScript to interact with the Notes app. While the library can be compiled on any platform, running it on non-macOS systems will return an error at runtime.
 
 ### Automation Permissions
 

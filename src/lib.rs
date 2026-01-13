@@ -9,8 +9,7 @@
 //! ## Requirements
 //!
 //! - **macOS only** - This library relies on AppleScript and the Notes app, which are
-//!   only available on macOS. Attempting to compile on other platforms will result in
-//!   a compile-time error.
+//!   only available on macOS. Running on other platforms will return an error at runtime.
 //! - Automation permissions for the Notes app must be granted in System Settings
 //!
 //! ## Quick Start
@@ -41,12 +40,6 @@
 //! exporter.list_folders().expect("Failed to list folders");
 //! exporter.export_folder("My Notes", "./exports").expect("Failed to export");
 //! ```
-
-#[cfg(not(target_os = "macos"))]
-compile_error!(
-    "apple-notes-exporter-rs only works on macOS. \
-     It relies on AppleScript and the Notes app, which are not available on other platforms."
-);
 
 use std::fs;
 use std::io::Write;
