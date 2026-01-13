@@ -24,9 +24,10 @@ cargo install --git https://github.com/pRizz/apple-notes-exporter-rs.git
 ## Features
 
 - Recursive export of Apple Notes folders (including all subfolders and notes)
+- **Automatic image extraction** - embedded base64 images are extracted to separate files
 - List all available folders across all accounts
 - Creates a mirrored directory tree structure
-- Exports each note as an HTML file
+- Exports each note as an HTML file with images in a companion folder
 - Breadth-first search (BFS) to find folders at any level
 - Support for multiple Apple Notes accounts
 - Simple command-line interface with subcommands
@@ -60,7 +61,7 @@ The binary will be available at `target/release/apple-notes-exporter`.
 
 ## CLI Usage
 
-The tool provides two subcommands: `list` (or `ls`) and `export`.
+The tool provides three subcommands: `list` (or `ls`), `export`, and `extract-attachments`.
 
 ### List Available Folders
 
@@ -74,10 +75,36 @@ apple-notes-exporter ls
 
 ### Export a Folder
 
-Export a folder recursively to HTML files:
+Export a folder recursively to HTML files. By default, embedded images are automatically extracted to separate files:
 
 ```bash
 apple-notes-exporter export <FOLDER> <OUTPUT_DIR>
+```
+
+This creates a structure like:
+
+```
+exports/
+├── My Notes/
+│   ├── Note Title -- abc123.html
+│   ├── Note Title -- abc123-attachments/
+│   │   ├── attachment-001.jpg
+│   │   └── attachment-002.png
+│   └── Another Note -- def456.html
+```
+
+To skip image extraction (keep images as embedded base64):
+
+```bash
+apple-notes-exporter export "My Notes" ./exports --no-extract-attachments
+```
+
+### Extract Attachments from Existing Exports
+
+If you have previously exported notes without extracting images, you can extract them later:
+
+```bash
+apple-notes-exporter extract-attachments ./exports
 ```
 
 ### Examples
@@ -99,6 +126,12 @@ Export a folder from a specific account (useful when folder names exist in multi
 ```bash
 apple-notes-exporter export "iCloud:My Notes" ./exports
 apple-notes-exporter export "Google:Work Notes" ./exports
+```
+
+Export without extracting images:
+
+```bash
+apple-notes-exporter export "My Notes" ./exports --no-extract-attachments
 ```
 
 ## Running from Source
@@ -164,8 +197,13 @@ fn main() -> apple_notes_exporter_rs::Result<()> {
     let exporter = Exporter::new();
 
     exporter.list_folders()?;
-    exporter.export_folder("My Notes", "./exports")?;
-    exporter.export_folder_from_account("iCloud", "Work", "./work_exports")?;
+
+    // Export and extract images (recommended)
+    let results = exporter.export_folder_with_attachments("My Notes", "./exports")?;
+    println!("Extracted {} images", results.iter().map(|r| r.attachments.len()).sum::<usize>());
+
+    // Or export without extracting images
+    exporter.export_folder("Work", "./work_exports")?;
 
     Ok(())
 }
@@ -183,6 +221,27 @@ fn main() -> apple_notes_exporter_rs::Result<()> {
 
     exporter.list_folders()?;
     exporter.export_folder("My Notes", "./exports")?;
+
+    Ok(())
+}
+```
+
+### Extracting Attachments from Existing Exports
+
+You can also extract images from previously exported HTML files:
+
+```rust
+use apple_notes_exporter_rs::{extract_attachments_from_html, extract_attachments_from_directory};
+
+fn main() -> apple_notes_exporter_rs::Result<()> {
+    // Extract from a single HTML file
+    let result = extract_attachments_from_html("./exports/My Note -- abc123.html")?;
+    println!("Extracted {} images", result.attachments.len());
+
+    // Extract from all HTML files in a directory (recursive)
+    let results = extract_attachments_from_directory("./exports")?;
+    let total: usize = results.iter().map(|r| r.attachments.len()).sum();
+    println!("Extracted {total} images from {} files", results.len());
 
     Ok(())
 }
@@ -217,7 +276,9 @@ fn main() {
 
 3. **Output Format**: Each note is exported as an HTML file, preserving the folder structure in the output directory.
 
-4. **Account Handling**: By default, the folder search looks in all accounts. If a folder name exists in multiple accounts, you can specify the account using the `AccountName:FolderName` format.
+4. **Image Extraction**: By default, embedded base64 images in the HTML are extracted to separate files in a companion `<note-name>-attachments/` folder. The HTML is updated to reference the local files. Supported formats: PNG, JPEG, GIF, WebP, SVG, BMP, TIFF.
+
+5. **Account Handling**: By default, the folder search looks in all accounts. If a folder name exists in multiple accounts, you can specify the account using the `AccountName:FolderName` format.
 
 ## Requirements
 
@@ -240,7 +301,7 @@ If permissions are not granted, the export will fail.
 ```
 apple-notes-exporter-rs/
 ├── src/
-│   ├── lib.rs               # Library with public API
+│   ├── lib.rs               # Library: export API + attachment extraction
 │   └── main.rs              # CLI application
 ├── vendor/
 │   └── apple-notes-exporter/
