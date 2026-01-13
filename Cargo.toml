@@ -2,6 +2,12 @@
 name = "apple-notes-exporter-rs"
 version = "0.1.0"
 edition = "2024"
+description = "A command-line tool for recursively exporting Apple Notes folders to the file system via AppleScript"
+license = "MIT"
+repository = "https://github.com/pRizz/apple-notes-exporter-rs"
+authors = ["Peter Ryszkiewicz"]
+keywords = ["apple-notes", "export", "applescript", "notes", "backup"]
+categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
 name = "apple-notes-exporter"
